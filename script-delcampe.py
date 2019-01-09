@@ -2,6 +2,7 @@
 import sys, getopt
 import logging
 import os
+import pprint
 from pathlib import Path
 from requests_html import HTMLSession
 from threading import Thread
@@ -81,7 +82,8 @@ def main(argv):
 	commande='script-delcampe.py {0} {1} {2} {3}'.format(optionS,optionT,optionM,optionV)
 
 class recherche:
-	urlDelcampe="https://www.delcampe.net/fr/collections"
+	urlDelcampe="https://www.delcampe.net"
+	urlDelcampeCollections='{0}/fr/collections'.format(urlDelcampe)
 
 	# nombre de réponses par page
 	size=480
@@ -92,6 +94,7 @@ class recherche:
 		self.searchURL=self.set_searchURL()
 		self.nbPages=self.get_nbPages()
 		self.listePages=self.get_listePages()
+		self.listeVentes=self.get_listeVentes()
 
 	# génere une url de la forme : https://https://www.delcampe.net/fr/collections/france/entiers-postaux/search?size=480
 	# en fonction des critères de recherche
@@ -106,7 +109,7 @@ class recherche:
 		if vendu:
 			displayongoing='&display_ongoing=closed'
 
-		url='{0}/{1}/search?size={2}{3}'.format(self.urlDelcampe,self.section,self.size,termURL,displayongoing)
+		url='{0}/{1}/search?size={2}{3}'.format(self.urlDelcampeCollections,self.section,self.size,termURL,displayongoing)
 		return url
 
 	#
@@ -118,7 +121,7 @@ class recherche:
 
 		# on contrôle que la connexion est OK
 		if r.status_code == 200:
-			print('OK')
+			print('Lecture URL : OK')
 
 			# liste des ventes
 			#print(r.html.xpath('//*[@id]/div/div[1]/div/a[@class="item-link"]/@href'))
@@ -126,7 +129,8 @@ class recherche:
 			# liste des pages
 			try:
 				listePages=r.html.xpath('//*[@class="pag-number"]/text()')
-				nbpages=listePages[-1]
+				print('liste {0}'.format(listePages))
+				nbpages=listePages[0]
 			except:
 				nbpages=1
 
@@ -138,28 +142,85 @@ class recherche:
 	# retourne la liste des pages de la recherche
 	def get_listePages(self):
 		listePages=[]
+
+		# si on a une seule page, on met juste la requête dans le tableau
 		for pages in range(0,self.nbPages):
-			listePages.append('{0}&page={1}'.format(self.searchURL,pages))
+			listePages.append('{0}&page={1}'.format(self.searchURL,pages+1))
 			#print ('{0}&page={1}'.format(self.searchURL,pages+1))
 		return listePages
 
 
 	# retourne la liste des ventes actuelles et passées pour la recherche en question
 	def get_listeVentes(self):
+
 		splitted=[]
+		splittedFullURL=[]
+		numpage=1
+
 		for page in self.listePages:
+			print('Récupération de la liste des ventes de la page {0}/{1}'.format(numpage,self.nbPages))
+		#	print("page {0}/{1}".format(page,self.listePages))
 			# on se connecte sur la page
 			r = session.get(page)
 			# pour avoir le lien, le vendeur et le prix
 			#r.html.xpath('//*[@class="item-footer"]/*/@href|//*[@class="option-content"]/*/@title|//*[@class="item-price"]/*/text()')
 			# pour le mettre dans un tableau de tuples :
 			#split(r.html.xpath('//*[@class="item-footer"]/*/@href|//*[@class="option-content"]/*/@title|//*[@class="item-price"]/*/text()'),3)
+
+
+			# on doit pouvoir directement créer les ventes sans repasser par la lecture de chacune de celles-ci, on a en effet tout ce qu'il faut
+			#  sur la page de recherche !!!!!!
+			# suite pb récupération des images et ventes mises en pub
+			# Id de la vente : r.html.xpath('//*[@class="item-listing item-all-thumbs"]/div[@class="item-gallery"]/@id')
+			# vendeur r.html.xpath('//*[@class="item-listing item-all-thumbs"]/div[@class="item-gallery"]/*//div[@class="option-content"]/a/@title')
+			# prix r.html.xpath('//*[@class="item-listing item-all-thumbs"]/*//div[@class="item-footer"]/*//div[@class="item-price"]/*/text()')
+			# images = r.html.xpath('//*[@class="item-listing item-all-thumbs"]/*//div[@class="image-content"]/a/@href')
+
 			splitted=splitted + (split(r.html.xpath('//*[@class="item-footer"]/*/@href|//*[@class="option-content"]/*/@title|//*[@class="item-price"]/*/text()'),3))
-		return searchURLPage
+			numpage=numpage+1
+		# les href retournés sont de la forme : /fr/collections/cartes-postales/france/autres-communes-3/c-p-s-m-c-p-m-04-saint-paul-sur-ubaye-tete-de-cassoun-voir-2-scans-331934408.html'
+		# on veut ajouter le https de Delcampe
+
+		for ventes in splitted:
+			print('\nVente : {0}{1}'.format(self.urlDelcampe,ventes[0]))
+			print('Prix  : {0}'.format(ventes[1]))
+			print('vendeur  : {0}'.format(ventes[2]))
+			venteFullURL=vente('{0}{1}'.format(self.urlDelcampe,ventes[0]),ventes[1],ventes[2])
+			print("listeventes : vente {0} qui a le prix {1} et vendeur : {2}".format(venteFullURL.url,venteFullURL.prix,venteFullURL.vendeur))
+			splittedFullURL.append(venteFullURL)
+
+		return splittedFullURL
 
 class vente:
-	def __init__(self):
-		self.nom="po"
+	def __init__(self,url,prix,vendeur):
+		self.url=url
+		self.prix=prix
+		self.vendeur=vendeur
+		self.listeImages=self.get_listeImages()
+
+	# normalement pas nécessaire car on les aura directement depuis la recherche !!!!
+	def get_listeImages(self):
+
+		listeImages=[]
+		print('\nAnalyse des images de la vente {0}'.format(self.url))
+
+		# on se connecte sur la page
+		r = session.get(self.url)
+
+		# on contrôle que la connexion est OK
+		if r.status_code == 200:
+			print('Lecture Vente : OK')
+
+			# liste des ventes
+			#print(r.html.xpath('//*[@id]/div/div[1]/div/a[@class="item-link"]/@href'))
+
+			# liste des images
+			listeImages.append(r.html.xpath('//*[@class="slick"]/div/a/img/@src'))
+			print('liste {0}'.format(listeImages))
+		else:
+			print('Problème. Code retour : {0}'.format(r.status_code))
+
+		return listeImages
 
 # génération du nom du répertoire de téléchargement
 def generate_download_dir():
@@ -202,7 +263,7 @@ if __name__ == "__main__":
 	print(recherche.searchURL)
 	print(recherche.nbPages)
 	print(recherche.listePages)
-
+	print(recherche.listeVentes)
 
 
 #il faudra utiliser les threads pour télécharger

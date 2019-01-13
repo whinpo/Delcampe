@@ -5,7 +5,9 @@ import os
 import pprint
 from pathlib import Path
 from requests_html import HTMLSession
+import wget
 from threading import Thread
+import re
 session = HTMLSession()
 
 def usage():
@@ -21,6 +23,15 @@ def split(arr, size):
          arr   = arr[size:]
      arrs.append(arr)
      return arrs
+
+# fonction pour remettre au propre les libellés des ventes
+def urlify(s):
+	#print('urlify s={0}'.format(s))
+	# Remove all non-word characters (everything except numbers and letters)
+	s = re.sub(r"[^\w\s]", '', s)
+	# Replace all runs of whitespace with a single dash
+	s = re.sub(r"\s+", '-', s)
+	return s
 
 def main(argv):
 	global commande
@@ -84,13 +95,15 @@ def main(argv):
 class recherche:
 	urlDelcampe="https://www.delcampe.net"
 	urlDelcampeCollections='{0}/fr/collections'.format(urlDelcampe)
+	home="/Philatélie/pompage_sites/Delcampe2"
 
 	# nombre de réponses par page
 	size=480
 
-	def __init__(self,section,term):
+	def __init__(self,section,term,closed):
 		self.section=section
 		self.term=term
+		self.closed=closed
 		self.searchURL=self.set_searchURL()
 		self.nbPages=self.get_nbPages()
 		self.pages=self.get_pages()
@@ -98,10 +111,13 @@ class recherche:
 		self.nbVentes=len(self.ventes)
 		self.images=self.get_images()
 		self.nbImages=len(self.images)
+		self.download_dir=self.set_download_dir()
 		#print(self.searchURL)
-		print(self.pages)
+		# print(self.pages)
 		print('nb images : {0}'.format(self.nbImages))
 		print('nb Ventes : {0}'.format(self.nbVentes))
+		print('Download Dir : {0}'.format(self.download_dir))
+
 	#	self.nbImages=self.get_nbImages()
 
 	# génere une url de la forme : https://https://www.delcampe.net/fr/collections/france/entiers-postaux/search?size=480
@@ -114,12 +130,25 @@ class recherche:
 
 		# on veut voir les ventes cloturées
 		displayongoing=''
-		if vendu:
+		if self.closed == True:
 			displayongoing='&display_ongoing=closed'
 		# on affiche en gallerie avec les thumbs (pour pouvoir avoir les zooms) et on trie par date de vente
-		url='{0}/{1}/search?view=gallery&order=sale_start_datetime&view=thumbs&size={2}{3}'.format(self.urlDelcampeCollections,self.section,self.size,termURL,displayongoing)
+		url='{0}/{1}/search?view=gallery&order=sale_start_datetime&view=thumbs&size={2}{3}{4}'.format(self.urlDelcampeCollections,self.section,self.size,termURL,displayongoing)
 		return url
 
+	# génération du nom du répertoire de téléchargement
+	def set_download_dir(self):
+		# si on a un critère de recherche
+		download_dir='{0}/{1}'.format(homedir,self.section)
+		if term:
+			download_dir='{0}/{1}'.format(download_dir,term)
+		if self.closed==True:
+			encours="-closed"
+		else:
+			encours="-en-cours"
+		download_dir='{0}{2}'.format(download_dir,section,encours)
+
+		return 	download_dir
 	#
 	def get_nbPages(self):
 		print(self.searchURL)
@@ -159,12 +188,14 @@ class recherche:
 
 
 	# retourne la liste des ventes actuelles et passées pour la recherche en question
+	# on supprime les ventes de cpaphil...
 	def get_ventes(self):
 
 		splitted=[]
 		splittedFullURL=[]
 		numpage=1
 		listeVentes=[]
+		listeVentesNettoyées=[]
 		for page in self.pages:
 			print('Récupération de la liste des ventes de la page {0}/{1}'.format(numpage,self.nbPages))
 		#	print("page {0}/{1}".format(page,self.listePages))
@@ -175,18 +206,20 @@ class recherche:
 				print('Lecture URL {0} : OK'.format(page))
 
 				print('Status : {0}'.format(r.status_code))
-				print('Analyse de la page en cours')
+				print('Analyse de la page en cours {0}'.format(page))
 				numpage=numpage+1
 
 				# commandes xpath pour récupérer l'ensemble des ventes, id, prix et liste des images
 				listeId=r.html.xpath('//*[@class="item-listing item-all-thumbs"]/div[@class="item-gallery"]/@id')
-				listeImg=r.html.xpath('//*[@class="item-listing item-all-thumbs"]/*//div[@class="image-container"]/div/a/@href')
+				#listeImg=r.html.xpath('//*[@class="item-listing item-all-thumbs"]/*//div[@class="image-container"]/div/a/@href')
+				listeImg=r.html.xpath('//*[@class="item-listing item-all-thumbs"]/*//div[@class="image-content"]/a/img/@data-lazy')
 				listePrix=r.html.xpath('//*[@class="item-listing item-all-thumbs"]/*//div[@class="item-footer"]/*//div[@class="item-price"]/*/text()')
 				listeVendeurs=r.html.xpath('//*[@class="item-listing item-all-thumbs"]/div[@class="item-gallery"]/*//div[@class="option-content"]/a/@title')
+				listeLibellés=r.html.xpath('//*[@class="item-listing item-all-thumbs"]/div[@class="item-gallery"]//*[@class="item-footer"]/a/@title')
 
 				listeVentestemp={}
 
-				print('Génération de la liste des Ventes')
+				print('Génération de la liste des Ventes  {0}'.format(page))
 				# on crée une liste listeVentestemp qui va contenir un nested dictionnary
 				i=0
 				for id in listeId:
@@ -194,33 +227,41 @@ class recherche:
 					idnum=id[5:]
 					# on intialise le dict nested qui a pour clé l'id
 					listeVentestemp[idnum] = {}
-					# affectation du prix
-					listeVentestemp[idnum]["prix"]=listePrix[i][:-2]
+					# affectation libellé vente
+					listeVentestemp[idnum]["libellé"]=urlify(listeLibellés[i])
 					# affectation du vendeur
 					listeVentestemp[idnum]["vendeur"]=listeVendeurs[i]
+					# affectation du prix
+					listeVentestemp[idnum]["prix"]=listePrix[i][:-2]
 					# on crée un tableau vide pour les images (on est obligé de les traiter à part, leur nb n'étant pas fixe)
 					listeVentestemp[idnum]["images"]=[]
 					i=i+1
 
 				# on parcout listeImg et on affecte les images à "images" de l'id en question
-				print('Génération de la liste des images des Ventes')
+				print('Génération de la liste des images des Ventes  {0}'.format(page))
 				for item in listeImg:
-					# l'image est de la forme https://images-00.delcampe-static.net/img_large/auction/000/618/719/212_001.jpg
+					# l'image est de la forme https://images-00.delcampe-static.net/img_large/auction/000/618/719/212_001.jpg?v=xx
+					# on enleve le .jpg et ce qui suit (en cherchant sa position)
 					# on prend la fin => 618/719/212, si cela commence par un 0 on l'enlève et on enlève ensuite les / pour obtenir
 					# 618/719/212 => 618719212
 					# cela nous permet de retrouver l'id et donc de pouvoir affecter
-					num1=item[-19:-8]
-					imageId='{0}{1}{2}'.format(num1[:3],num1[4:7],num1[8:11])
-					#print(imageId,item)
+					# de plus on transforme le thumb en large (la requête xpath se chargant de récupérer les thumbs )
+					imageId=item[:item.find('.jpg')][-16:-4].replace('/','')
+					# print(imageId,item)
 					while imageId[0] == '0':
 						imageId=imageId[1:]
-					listeVentestemp[imageId]["images"].append(item)
+					listeVentestemp[imageId]["images"].append(item[:item.find('?v=')].replace('img_thumb','img_large'))
 
 				for id in listeVentestemp:
 					listeVentes.append(vente(id,listeVentestemp[id]))
 			else:
 				print('Problème lecture {0} . Code retour : {1}'.format(page,r.status_code))
-		return listeVentes
+
+			# on ne veut pas les objets de cpaphil, on repasse donc les ventes et on supprime les lignes en question
+			for item in listeVentes:
+				if item.vendeur!='cpaphil':
+					listeVentesNettoyées.append(item)
+		return listeVentesNettoyées
 
 	# retourne les images de la recherche
 	# on fait un boucle sur les images de la vente pour avoir tout dans un seul array
@@ -235,36 +276,52 @@ class recherche:
 class vente:
 	def __init__(self,id,dict):
 		self.id=id
-		self.prix=dict['prix']
+		self.prix=dict['prix'].replace(",",".")
 		#self.url=url
 		self.vendeur=dict['vendeur']
-		self.images=dict['images']
+		self.libellé=dict['libellé']
+		self.images={}
+		for img in dict['images']:
+			numImage=img[:img.find('.jpg')][-3:]
+			# on récupère l'url
+			try:
+				self.images[numImage]['url']=img
+			except:
+				self.images[numImage]={}
+				self.images[numImage]['url']=img
+			# on calcule le libellé pour le téléchargement
+			self.images[numImage]['nomImage']='{0}_{1}_prix:{2}_{3}_{4}.jpg'.format(self.id,self.vendeur,self.prix,self.libellé,numImage)
+
 		self.nbImages=len(self.images)
 
 
 	def info(self):
-		print("id : {0}".format(self.id))
+		print("\nid : {0}".format(self.id))
+		print("Libellé : {0}".format(self.libellé))
 		print("vendeur : {0}".format(self.vendeur))
 		print("prix : {0}".format(self.prix))
 		print("Nb images : {0}".format(self.nbImages))
-		print("images : {0}".format(self.images))
+		# print("images : {0}".format(self.images))
+		for lesimages in self.images:
+			print('\turl : {0}'.format(self.images[lesimages]['url']))
+			print('\tnom image : {0}'.format(self.images[lesimages]['nomImage']))
+			# print('nom image :{0}'.format(self.images[lesimages]['nomImages']))
 
-# génération du nom du répertoire de téléchargement
-def generate_download_dir():
-	global download_dir
-	download_dir='{0}/{1}'.format(homedir,section)
-	# si on a un critère de recherche
-	if term:
-		download_dir='{0}-{1}'.format(download_dir,term)
-	return 	download_dir
+	def download_images(self,rechercheimage):
+		# on crée le dir si il n'existe pas
+		download_dir=rechercheimage.download_dir
+		dirAcreer = Path(download_dir)
+		if not dirAcreer.exists():
+			dirAcreer.mkdir(parents=True, exist_ok=True)
+		for lesimages in self.images:
+			url=self.images[lesimages]['url']
+			dest='{1}/{2}'.format(self.images[lesimages]['url'],download_dir,self.images[lesimages]['nomImage'])
+			try:
 
-# Création du répertoire de téléchargement
-def setup_download_dir():
-	global download_dir
+				wget.download(url,dest)
+			except:
+				print('Erreur sur {0}'.format(url))
 
-	dirAcreer = Path(download_dir)
-	if not dirAcreer.exists():
-		dirAcreer.mkdir(parents=True, exist_ok=True)
 
 if __name__ == "__main__":
 
@@ -278,14 +335,32 @@ if __name__ == "__main__":
 
 	# on génère la page de recherche principale
 	# ~ url=generateSearchURL(section,term,vendu)
-	# ~ nbpages=analyseURL(url)
+	# ~ nbpages=analyseURL(url)rechercheimage.
 	# ~ print(nbpages)
 
 	#generate_download_dir()
 	#print(download_dir)
 	#print(setup_download_dir())
 
-	recherche=recherche(section,term)
+	rechercheEnCours=recherche(section,term,False)
+	nbventeencours=1
+	nbimagesencours=0
+	nbtotalimages=rechercheEnCours.nbImages
+	nbtotalventes=rechercheEnCours.nbVentes
+	for lesventes in rechercheEnCours.ventes:
+		nbimagesencours=nbimagesencours+lesventes.nbImages
+		print("\nvente {0}/{1}".format(nbventeencours,nbtotalventes))
+		print("\t{0}".format(lesventes.libellé))
+		print("\tImages {0}/{1}".format(nbimagesencours,nbtotalimages))
+		lesventes.download_images(rechercheEnCours)
+		nbventeencours=nbventeencours+1
+
+
+	recherchePassee=recherche(section,term,True)
+	for lesventes in recherchePassee.ventes:
+		lesventes.info()
+		lesventes.download_images(recherchePassee)
+
 
 
 #il faudra utiliser les threads pour télécharger

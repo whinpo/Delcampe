@@ -93,8 +93,16 @@ class recherche:
 		self.term=term
 		self.searchURL=self.set_searchURL()
 		self.nbPages=self.get_nbPages()
-		self.listePages=self.get_listePages()
-		self.listeVentes=self.get_listeVentes()
+		self.pages=self.get_pages()
+		self.ventes=self.get_ventes()
+		self.nbVentes=len(self.ventes)
+		self.images=self.get_images()
+		self.nbImages=len(self.images)
+		#print(self.searchURL)
+		print(self.pages)
+		print('nb images : {0}'.format(self.nbImages))
+		print('nb Ventes : {0}'.format(self.nbVentes))
+	#	self.nbImages=self.get_nbImages()
 
 	# génere une url de la forme : https://https://www.delcampe.net/fr/collections/france/entiers-postaux/search?size=480
 	# en fonction des critères de recherche
@@ -108,8 +116,8 @@ class recherche:
 		displayongoing=''
 		if vendu:
 			displayongoing='&display_ongoing=closed'
-
-		url='{0}/{1}/search?size={2}{3}'.format(self.urlDelcampeCollections,self.section,self.size,termURL,displayongoing)
+		# on affiche en gallerie avec les thumbs (pour pouvoir avoir les zooms) et on trie par date de vente
+		url='{0}/{1}/search?view=gallery&order=sale_start_datetime&view=thumbs&size={2}{3}'.format(self.urlDelcampeCollections,self.section,self.size,termURL,displayongoing)
 		return url
 
 	#
@@ -134,13 +142,13 @@ class recherche:
 			except:
 				nbpages=1
 
-			print('nbpages {0} à traiter'.format(nbpages))
+			print('Nb pages : {0}'.format(nbpages))
 		else:
 			print('Problème. Code retour : {0}'.format(r.status_code))
 		return int(nbpages)
 
 	# retourne la liste des pages de la recherche
-	def get_listePages(self):
+	def get_pages(self):
 		listePages=[]
 
 		# si on a une seule page, on met juste la requête dans le tableau
@@ -151,76 +159,95 @@ class recherche:
 
 
 	# retourne la liste des ventes actuelles et passées pour la recherche en question
-	def get_listeVentes(self):
+	def get_ventes(self):
 
 		splitted=[]
 		splittedFullURL=[]
 		numpage=1
-
-		for page in self.listePages:
+		listeVentes=[]
+		for page in self.pages:
 			print('Récupération de la liste des ventes de la page {0}/{1}'.format(numpage,self.nbPages))
 		#	print("page {0}/{1}".format(page,self.listePages))
 			# on se connecte sur la page
 			r = session.get(page)
-			# pour avoir le lien, le vendeur et le prix
-			#r.html.xpath('//*[@class="item-footer"]/*/@href|//*[@class="option-content"]/*/@title|//*[@class="item-price"]/*/text()')
-			# pour le mettre dans un tableau de tuples :
-			#split(r.html.xpath('//*[@class="item-footer"]/*/@href|//*[@class="option-content"]/*/@title|//*[@class="item-price"]/*/text()'),3)
+			# on contrôle que la connexion est OK
+			if r.status_code == 200:
+				print('Lecture URL {0} : OK'.format(page))
 
+				print('Status : {0}'.format(r.status_code))
+				print('Analyse de la page en cours')
+				numpage=numpage+1
 
-			# on doit pouvoir directement créer les ventes sans repasser par la lecture de chacune de celles-ci, on a en effet tout ce qu'il faut
-			#  sur la page de recherche !!!!!!
-			# suite pb récupération des images et ventes mises en pub
-			# Id de la vente : r.html.xpath('//*[@class="item-listing item-all-thumbs"]/div[@class="item-gallery"]/@id')
-			# vendeur r.html.xpath('//*[@class="item-listing item-all-thumbs"]/div[@class="item-gallery"]/*//div[@class="option-content"]/a/@title')
-			# prix r.html.xpath('//*[@class="item-listing item-all-thumbs"]/*//div[@class="item-footer"]/*//div[@class="item-price"]/*/text()')
-			# images = r.html.xpath('//*[@class="item-listing item-all-thumbs"]/*//div[@class="image-content"]/a/@href')
+				# commandes xpath pour récupérer l'ensemble des ventes, id, prix et liste des images
+				listeId=r.html.xpath('//*[@class="item-listing item-all-thumbs"]/div[@class="item-gallery"]/@id')
+				listeImg=r.html.xpath('//*[@class="item-listing item-all-thumbs"]/*//div[@class="image-container"]/div/a/@href')
+				listePrix=r.html.xpath('//*[@class="item-listing item-all-thumbs"]/*//div[@class="item-footer"]/*//div[@class="item-price"]/*/text()')
+				listeVendeurs=r.html.xpath('//*[@class="item-listing item-all-thumbs"]/div[@class="item-gallery"]/*//div[@class="option-content"]/a/@title')
 
-			splitted=splitted + (split(r.html.xpath('//*[@class="item-footer"]/*/@href|//*[@class="option-content"]/*/@title|//*[@class="item-price"]/*/text()'),3))
-			numpage=numpage+1
-		# les href retournés sont de la forme : /fr/collections/cartes-postales/france/autres-communes-3/c-p-s-m-c-p-m-04-saint-paul-sur-ubaye-tete-de-cassoun-voir-2-scans-331934408.html'
-		# on veut ajouter le https de Delcampe
+				listeVentestemp={}
 
-		for ventes in splitted:
-			print('\nVente : {0}{1}'.format(self.urlDelcampe,ventes[0]))
-			print('Prix  : {0}'.format(ventes[1]))
-			print('vendeur  : {0}'.format(ventes[2]))
-			venteFullURL=vente('{0}{1}'.format(self.urlDelcampe,ventes[0]),ventes[1],ventes[2])
-			print("listeventes : vente {0} qui a le prix {1} et vendeur : {2}".format(venteFullURL.url,venteFullURL.prix,venteFullURL.vendeur))
-			splittedFullURL.append(venteFullURL)
+				print('Génération de la liste des Ventes')
+				# on crée une liste listeVentestemp qui va contenir un nested dictionnary
+				i=0
+				for id in listeId:
+					# on supprime item-
+					idnum=id[5:]
+					# on intialise le dict nested qui a pour clé l'id
+					listeVentestemp[idnum] = {}
+					# affectation du prix
+					listeVentestemp[idnum]["prix"]=listePrix[i][:-2]
+					# affectation du vendeur
+					listeVentestemp[idnum]["vendeur"]=listeVendeurs[i]
+					# on crée un tableau vide pour les images (on est obligé de les traiter à part, leur nb n'étant pas fixe)
+					listeVentestemp[idnum]["images"]=[]
+					i=i+1
 
-		return splittedFullURL
+				# on parcout listeImg et on affecte les images à "images" de l'id en question
+				print('Génération de la liste des images des Ventes')
+				for item in listeImg:
+					# l'image est de la forme https://images-00.delcampe-static.net/img_large/auction/000/618/719/212_001.jpg
+					# on prend la fin => 618/719/212, si cela commence par un 0 on l'enlève et on enlève ensuite les / pour obtenir
+					# 618/719/212 => 618719212
+					# cela nous permet de retrouver l'id et donc de pouvoir affecter
+					num1=item[-19:-8]
+					imageId='{0}{1}{2}'.format(num1[:3],num1[4:7],num1[8:11])
+					#print(imageId,item)
+					while imageId[0] == '0':
+						imageId=imageId[1:]
+					listeVentestemp[imageId]["images"].append(item)
+
+				for id in listeVentestemp:
+					listeVentes.append(vente(id,listeVentestemp[id]))
+			else:
+				print('Problème lecture {0} . Code retour : {1}'.format(page,r.status_code))
+		return listeVentes
+
+	# retourne les images de la recherche
+	# on fait un boucle sur les images de la vente pour avoir tout dans un seul array
+	def get_images(self):
+		images=[]
+		for ventes in self.ventes:
+			for ventesimg in ventes.images:
+				images.append(ventesimg)
+		return images
+
 
 class vente:
-	def __init__(self,url,prix,vendeur):
-		self.url=url
-		self.prix=prix
-		self.vendeur=vendeur
-		self.listeImages=self.get_listeImages()
+	def __init__(self,id,dict):
+		self.id=id
+		self.prix=dict['prix']
+		#self.url=url
+		self.vendeur=dict['vendeur']
+		self.images=dict['images']
+		self.nbImages=len(self.images)
 
-	# normalement pas nécessaire car on les aura directement depuis la recherche !!!!
-	def get_listeImages(self):
 
-		listeImages=[]
-		print('\nAnalyse des images de la vente {0}'.format(self.url))
-
-		# on se connecte sur la page
-		r = session.get(self.url)
-
-		# on contrôle que la connexion est OK
-		if r.status_code == 200:
-			print('Lecture Vente : OK')
-
-			# liste des ventes
-			#print(r.html.xpath('//*[@id]/div/div[1]/div/a[@class="item-link"]/@href'))
-
-			# liste des images
-			listeImages.append(r.html.xpath('//*[@class="slick"]/div/a/img/@src'))
-			print('liste {0}'.format(listeImages))
-		else:
-			print('Problème. Code retour : {0}'.format(r.status_code))
-
-		return listeImages
+	def info(self):
+		print("id : {0}".format(self.id))
+		print("vendeur : {0}".format(self.vendeur))
+		print("prix : {0}".format(self.prix))
+		print("Nb images : {0}".format(self.nbImages))
+		print("images : {0}".format(self.images))
 
 # génération du nom du répertoire de téléchargement
 def generate_download_dir():
@@ -259,11 +286,6 @@ if __name__ == "__main__":
 	#print(setup_download_dir())
 
 	recherche=recherche(section,term)
-#	print(dir(recherche))
-	print(recherche.searchURL)
-	print(recherche.nbPages)
-	print(recherche.listePages)
-	print(recherche.listeVentes)
 
 
 #il faudra utiliser les threads pour télécharger

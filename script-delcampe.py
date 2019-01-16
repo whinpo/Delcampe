@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-#testPO
 import sys, getopt
 import logging
 import os
@@ -7,9 +6,19 @@ import pprint
 from pathlib import Path
 from requests_html import HTMLSession
 import wget
-from threading import Thread
+import multiprocessing
+import threading
+import time
 import re
 session = HTMLSession()
+
+def run_process(url, output_path):
+	print('download {0} vers {1}'.format(url,output_path))
+	if not os.path.isfile(output_path):
+		try:
+			wget.download(url, out=output_path)
+		except:
+			print('problème d/l {0}'.format(url))
 
 def usage():
 	print('script-delcampe.py -s <section> -t <terme de recherche> <-n maxscreens>  [- si vendu],["section="]')
@@ -294,7 +303,7 @@ class vente:
 			self.images[numImage]['nomImage']='{0}_{1}_prix:{2}_{3}_{4}.jpg'.format(self.id,self.vendeur,self.prix,self.libellé,numImage)
 
 		self.nbImages=len(self.images)
-
+		self.listeimages=self.get_listeimages()
 
 	def info(self):
 		print("\nid : {0}".format(self.id))
@@ -308,8 +317,24 @@ class vente:
 			print('\tnom image : {0}'.format(self.images[lesimages]['nomImage']))
 			# print('nom image :{0}'.format(self.images[lesimages]['nomImages']))
 
-	def download_images(self,rechercheimage):
+	def get_listeimages(self):
+		listeurl=[]
+		listenoms=[]
+		listeimages=[]
+		for lesimages in self.images:
+			# print('b : {0}'.format(self.images[lesimages]['url']))
+			listeimages.append([self.images[lesimages]['url'],self.images[lesimages]['nomImage']])
+			# listenoms.append(self.images[lesimages]['nomImage'])
+			# listeimages.append([listeurl,listenoms])
+		return listeimages
+
+	def download_images_multi_cpu(self,rechercheimage):
 		# on crée le dir si il n'existe pas
+		cpus = multiprocessing.cpu_count()
+		max_pool_size=4
+		# pool= multiprocessing.Pool(cpus if cpus < max_pool_size else max_pool_size)
+		pool=multiprocessing.Pool(100)
+
 		download_dir=rechercheimage.download_dir
 		dirAcreer = Path(download_dir)
 		if not dirAcreer.exists():
@@ -317,11 +342,96 @@ class vente:
 		for lesimages in self.images:
 			url=self.images[lesimages]['url']
 			dest='{1}/{2}'.format(self.images[lesimages]['url'],download_dir,self.images[lesimages]['nomImage'])
-			try:
+			if not os.path.isfile(dest):
+				try:
+					# wget.download(url,dest)
+					pool.apply_async(run_process, args=(url, dest, ))
+				except:
+					print('Erreur sur {0}'.format(url))
 
-				wget.download(url,dest)
+		pool.close()
+		pool.join()
+		print("finish")
+
+def download_multicpu(liste,rechercheimage):
+	# on crée le dir si il n'existe pas
+	cpus = multiprocessing.cpu_count()
+	max_pool_size=20
+	pool= multiprocessing.Pool(cpus if cpus < max_pool_size else max_pool_size)
+
+	download_dir=rechercheimage.download_dir
+	print(download_dir)
+	dirAcreer = Path(download_dir)
+	if not dirAcreer.exists():
+		dirAcreer.mkdir(parents=True, exist_ok=True)
+	for dl in liste:
+		url=dl[0][0]
+		dest='{0}/{1}'.format(download_dir,dl[0][1])
+	# if not os.path.isfile(dest):
+			# try:
+				# wget.download(url,dest)
+		pool.apply_async(run_process, args=(url, dest, ))
+			# except:
+			# 	print('Erreur sur {0}'.format(url))
+
+	pool.close()
+	pool.join()
+	print("finish")
+
+def download_multithread(liste,rechercheimage):
+	# on crée le dir si il n'existe pas
+	maxthread = 60
+
+	download_dir=rechercheimage.download_dir
+	print(download_dir)
+	dirAcreer = Path(download_dir)
+	if not dirAcreer.exists():
+		dirAcreer.mkdir(parents=True, exist_ok=True)
+	for dl in liste:
+		for dl1 in dl:
+			while threading.activeCount() > maxthread:
+				print('threading.activeCount={0}'.format(threading.activeCount()))
+				time.sleep(1)
+			try :
+				url=dl1[0]
+				dest='{0}/{1}'.format(download_dir,dl1[1])
+				t = threading.Thread(target=run_process, args=(url, dest))
+				t.start()
 			except:
-				print('Erreur sur {0}'.format(url))
+				print('problème avec {0}'.format(dl))
+
+	time.sleep(5)
+	print('\nthreading.activeCount={0}'.format(threading.activeCount()))
+	print('add all pic to download list..')
+	cthread = threading.current_thread()
+	for t in threading.enumerate():
+		if t != cthread:
+			pass #t.terminate()
+	print('bye..')
+
+	# if not os.path.isfile(dest):
+			# try:
+				# wget.download(url,dest)
+# def recherche_multithread(section,term):
+# 	# on crée le dir si il n'existe pas
+# 	maxthread = 60
+#
+# 	for fini in (True,False)
+# 		t = threading.Thread(target=recherche, args=(section, term, True))
+# 		t.start()
+#
+# 	time.sleep(5)
+# 	print('threading.activeCount={0}'.format(threading.activeCount()))
+# 	print('add all pic to download list..')
+# 	cthread = threading.current_thread()
+# 	for t in threading.enumerate():
+# 		if t != cthread:
+# 			pass #t.terminate()
+# 	print('bye..')
+#
+# 	# if not os.path.isfile(dest):
+# 			# try:
+# 				# wget.download(url,dest)
 
 
 if __name__ == "__main__":
@@ -334,51 +444,29 @@ if __name__ == "__main__":
 
 	print(section)
 
-	# on génère la page de recherche principale
-	# ~ url=generateSearchURL(section,term,vendu)
-	# ~ nbpages=analyseURL(url)rechercheimage.
-	# ~ print(nbpages)
+	# rechercheEnCours=recherche(section,term,False)
+	liste_dl=[]
 
-	#generate_download_dir()
-	#print(download_dir)
-	#print(setup_download_dir())
+	liste_dl=[]
 
-	rechercheEnCours=recherche(section,term,False)
-	nbventeencours=1
-	nbimagesencours=0
-	nbtotalimages=rechercheEnCours.nbImages
-	nbtotalventes=rechercheEnCours.nbVentes
-	for lesventes in rechercheEnCours.ventes:
-		nbimagesencours=nbimagesencours+lesventes.nbImages
-		print("\nvente {0}/{1}".format(nbventeencours,nbtotalventes))
-		print("\t{0}".format(lesventes.libellé))
-		print("\tImages {0}/{1}".format(nbimagesencours,nbtotalimages))
-		lesventes.download_images(rechercheEnCours)
-		nbventeencours=nbventeencours+1
+	for closed in (False, True):
+		liste_dl=[]
 
-
-	recherchePassee=recherche(section,term,True)
-	for lesventes in recherchePassee.ventes:
-		lesventes.info()
-		lesventes.download_images(recherchePassee)
-
-
-
-#il faudra utiliser les threads pour télécharger
-#https://www.toptal.com/python/beginners-guide-to-concurrency-and-parallelism-in-python
-# pour chacune des pages
-## créer une liste contient toutes les url des objets en ventes sur la page
-## pour chaque URL de la page
-### créer une liste contient toutes les images de la page ainsi que le nom de l'image à obtenir numero_vendeur_libelle_num_image
-## télécharger toutes les images avec une rupture toutes les 12.000 images
-
-# exemple
-# url = https://www.delcampe.net/fr/collections/timbres/france/1876-1898-sage-type-ii/r1752-690-sage-type-ii-n-98a-n-98c-cad-689262388.html
-# nom image= r1752-690-sage-type-ii-n-98a-n-98c-cad-689262388
-## liste images : # ['https://images-02.delcampe-static.net/img_small/auction/000/689/262/388_001.jpg?v=3', 'https://images-00.delcampe-static.net/img_small/auction/000/689/262/388_002.jpg?v=3', 'https://images-01.delcampe-static.net/img_small/auction/000/689/262/388_003.jpg?v=3']
-## il faut supprimer le ?v=*
-## le nom vient de l'url : 689262388-rolaindharcourt_r1752-690-sage-type-ii-n-98a-n-98c-cad-689262388_001 002 et 003
-
-# liste des images d'une page : r.html.xpath('//*[@class="img-container"]/img/@src')
-# vendeur : r.html.xpath('//*[@class="nickname"]/text()')[-1]
-# prix : r.html.xpath('//*[@class="price"]/text()')[-1].replace('\xa0€','')
+		rechercheventes=recherche(section,term,closed)
+		for lesventes in rechercheventes.ventes:
+			# pp.pprint(lesventes.listeimages)
+			# print('a : {0}'.format(lesventes.listeimages))
+			liste_dl.append(lesventes.listeimages)
+		for dl in liste_dl:
+			print(dl)
+			print(len(dl))
+			for dl1 in dl:
+				try:
+					print('url : {0}'.format(dl1[0]))
+					print('nom : {0}\n'.format(dl1[1]))
+				except:
+					print('pb sur {0}'.format(dl1))
+		pp = pprint.PrettyPrinter(indent=4)
+		# pp.pprint(liste_dl)
+		# print(liste_dl)
+		download_multithread(liste_dl,rechercheventes)

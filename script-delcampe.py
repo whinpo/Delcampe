@@ -175,9 +175,9 @@ class recherche:
 
 			# liste des pages
 			try:
-				listePages=r.html.xpath('//*[@class="pag-number"]/text()')
+				listePages=r.html.xpath('//*[@class="numbers-container"]/*/a/text()')
 				print('liste {0}'.format(listePages))
-				nbpages=listePages[0]
+				nbpages=listePages[-1:][0]
 			except:
 				nbpages=1
 
@@ -249,6 +249,7 @@ class recherche:
 
 				# on parcout listeImg et on affecte les images à "images" de l'id en question
 				print('Génération de la liste des images des Ventes  {0}'.format(page))
+				print(listeImg)
 				for item in listeImg:
 					# l'image est de la forme https://images-00.delcampe-static.net/img_large/auction/000/618/719/212_001.jpg?v=xx
 					# on enleve le .jpg et ce qui suit (en cherchant sa position)
@@ -257,7 +258,7 @@ class recherche:
 					# cela nous permet de retrouver l'id et donc de pouvoir affecter
 					# de plus on transforme le thumb en large (la requête xpath se chargant de récupérer les thumbs )
 					imageId=item[:item.find('.jpg')][-16:-4].replace('/','')
-					# print(imageId,item)
+					print(imageId,item)
 					while imageId[0] == '0':
 						imageId=imageId[1:]
 					listeVentestemp[imageId]["images"].append(item[:item.find('?v=')].replace('img_thumb','img_large'))
@@ -411,7 +412,7 @@ def download_multithread(liste,rechercheimage):
 
 	# if not os.path.isfile(dest):
 			# try:
-				# wget.download(url,dest)
+			 wget.download(url,dest)
 # def recherche_multithread(section,term):
 # 	# on crée le dir si il n'existe pas
 # 	maxthread = 60

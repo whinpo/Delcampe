@@ -417,7 +417,7 @@ def download_multithread(liste,rechercheimage):
 # 	# on crée le dir si il n'existe pas
 # 	maxthread = 60
 #
-# 	for fini in (True,False)
+# 	for fini in (True,False) 
 # 		t = threading.Thread(target=recherche, args=(section, term, True))
 # 		t.start()
 #

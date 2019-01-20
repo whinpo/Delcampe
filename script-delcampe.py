@@ -4,23 +4,21 @@ import logging
 import os
 import pprint
 from pathlib import Path
-from requests_html import HTMLSession
+import requests
 import wget
-import multiprocessing
 import threading
 import time
 import re
 import bs4 as BeautifulSoup
 
-session = HTMLSession()
 
 def run_process(url, output_path):
-	print('download {0} vers {1}'.format(url,output_path))
+	# print('download {0} vers {1}'.format(url,output_path))
 	if not os.path.isfile(output_path):
 		try:
 			wget.download(url, out=output_path)
 		except:
-			print('problème d/l {0}'.format(url))
+			print('\nproblème d/l {0}'.format(url))
 
 def usage():
 	print('script-delcampe.py -s <section> -t <terme de recherche> <-n maxscreens>  [- si vendu],["section="]')
@@ -124,13 +122,11 @@ class recherche:
 		self.images=self.get_images()
 		self.nbImages=len(self.images)
 		self.download_dir=self.set_download_dir()
-		#print(self.searchURL)
-		# print(self.pages)
+		print('pages : {0}'.format(self.pages))
 		print('nb images : {0}'.format(self.nbImages))
 		print('nb Ventes : {0}'.format(self.nbVentes))
 		print('Download Dir : {0}'.format(self.download_dir))
 
-	#	self.nbImages=self.get_nbImages()
 
 	# génere une url de la forme : https://https://www.delcampe.net/fr/collections/france/entiers-postaux/search?size=480
 	# en fonction des critères de recherche
@@ -164,22 +160,17 @@ class recherche:
 	#
 	def get_nbPages(self):
 		print(self.searchURL)
-
 		# on se connecte sur la page
-		r = session.get(self.searchURL)
-
+		r = requests.get(self.searchURL)
+		soup=BeautifulSoup.BeautifulSoup(r.text,"lxml")
+		# on parse le résultat avec beautifulSoup
 		# on contrôle que la connexion est OK
 		if r.status_code == 200:
 			print('Lecture URL : OK')
 
-			# liste des ventes
-			#print(r.html.xpath('//*[@id]/div/div[1]/div/a[@class="item-link"]/@href'))
-
-			# liste des pages
+			# on recherche les a de classe pag-number, si on ne trouve pas => 1 page seulement
 			try:
-				listePages=r.html.xpath('//*[@class="numbers-container"]/*/a/text()')
-				print('liste {0}'.format(listePages))
-				nbpages=listePages[-1:][0]
+				nbpages=soup.find_all('a',class_='pag-number')[-1].get_text()
 			except:
 				nbpages=1
 
@@ -208,11 +199,13 @@ class recherche:
 		numpage=1
 		listeVentes=[]
 		listeVentesNettoyées=[]
+		# liste des vendeurs non voulus
+		vendeursNonVoulus=['cpaphil']
+
 		for page in self.pages:
 			print('Récupération de la liste des ventes de la page {0}/{1}'.format(numpage,self.nbPages))
-		#	print("page {0}/{1}".format(page,self.listePages))
 			# on se connecte sur la page
-			r = session.get(page)
+			r = requests.get(self.searchURL)
 			# on contrôle que la connexion est OK
 			if r.status_code == 200:
 				print('Lecture URL {0} : OK'.format(page))
@@ -221,60 +214,62 @@ class recherche:
 				print('Analyse de la page en cours {0}'.format(page))
 				numpage=numpage+1
 
-				# commandes xpath pour récupérer l'ensemble des ventes, id, prix et liste des images
-				listeId=r.html.xpath('//*[@class="item-listing item-all-thumbs"]/div[@class="item-gallery"]/@id')
-				#listeImg=r.html.xpath('//*[@class="item-listing item-all-thumbs"]/*//div[@class="image-container"]/div/a/@href')
-				listeImg=r.html.xpath('//*[@class="item-listing item-all-thumbs"]/*//div[@class="image-content"]/a/img/@data-lazy')
-				listePrix=r.html.xpath('//*[@class="item-listing item-all-thumbs"]/*//div[@class="item-footer"]/*//div[@class="item-price"]/*/text()')
-				listeVendeurs=r.html.xpath('//*[@class="item-listing item-all-thumbs"]/div[@class="item-gallery"]/*//div[@class="option-content"]/a/@title')
-				listeLibellés=r.html.xpath('//*[@class="item-listing item-all-thumbs"]/div[@class="item-gallery"]//*[@class="item-footer"]/a/@title')
+				# on crée une liste listeVentes qui va contenir un nested dictionnary
+				listeVentes=[]
 
-				listeVentestemp={}
+				# commande BeautifulSoup pour récupérer l'ensemble des ventes (id avec valeur item-999999)
+				soup=BeautifulSoup.BeautifulSoup(r.text,"lxml")
+				listeventes=soup.find_all(id=re.compile('item-\d'))
+				nbVentesPage=len(listeventes)
+				i=1
+				for vente_item in listeventes:
+					# print('On traite : {0} - ({1}/{2})'.format(vente_item['id'],i,nbVentesPage))
+					i+=1
+					venteDef={}
+					id=vente_item['id'].split('-')[1]
+					# on regarde si il y a bien une image
+					try:
+						test=vente_item.find('div',class_='image-content').a.img
+						# si oui on regarde si vendeur non voulu ou pas
+						vendeur=vente_item.find('div',class_='option-content').a['title']
+						if vendeur not in vendeursNonVoulus:
+							# print(vendeur)
+							# on a des images et un vendeur voulu => on crée la vente
+							prix=vente_item.find('div',class_='item-price').get_text().strip()[:-2].replace(',','.')
+							venteDef['id']=id
+							venteDef['vendeur']=vendeur
+							venteDef['prix']=prix
+							venteDef['listeImages']=[]
 
-				print('Génération de la liste des Ventes  {0}'.format(page))
-				# on crée une liste listeVentestemp qui va contenir un nested dictionnary
-				i=0
-				for id in listeId:
-					# on supprime item-
-					idnum=id[5:]
-					# on intialise le dict nested qui a pour clé l'id
-					listeVentestemp[idnum] = {}
-					# affectation libellé vente
-					listeVentestemp[idnum]["libellé"]=urlify(listeLibellés[i])
-					# affectation du vendeur
-					listeVentestemp[idnum]["vendeur"]=listeVendeurs[i]
-					# affectation du prix
-					listeVentestemp[idnum]["prix"]=listePrix[i][:-2]
-					# on crée un tableau vide pour les images (on est obligé de les traiter à part, leur nb n'étant pas fixe)
-					listeVentestemp[idnum]["images"]=[]
-					i=i+1
+							for listeimages in vente_item.find_all('div',class_='image-content'):
+								imageDef=[]
+								imagebrute=listeimages.a.img['data-lazy']
+								# on supprimer le ?v=2 de la fin et on remplace thumb par large
+								image=imagebrute.split('?')[0].replace('img_thumb','img_large')
+								# on contruit le libellé : id_vendeur_prix:prix_libellélisible_001.jpg par exemple
+								# pour le _001.jpg on utilise rsplit pour prendre _001.jpg?v=2 et on coupe ensuite
+								libelle='{0}_{1}_prix:{2}_{3}_{4}'.format(id,vendeur,prix,urlify(listeimages.a.img['alt']),imagebrute.rsplit('_',1)[1].split('?')[0])
+								# print(image)
+								# print(libelle)
+								imageDef=[image,libelle]
+								venteDef['listeImages'].append(imageDef)
 
-				# on parcout listeImg et on affecte les images à "images" de l'id en question
-				print('Génération de la liste des images des Ventes  {0}'.format(page))
-				print(listeImg)
-				for item in listeImg:
-					# l'image est de la forme https://images-00.delcampe-static.net/img_large/auction/000/618/719/212_001.jpg?v=xx
-					# on enleve le .jpg et ce qui suit (en cherchant sa position)
-					# on prend la fin => 618/719/212, si cela commence par un 0 on l'enlève et on enlève ensuite les / pour obtenir
-					# 618/719/212 => 618719212
-					# cela nous permet de retrouver l'id et donc de pouvoir affecter
-					# de plus on transforme le thumb en large (la requête xpath se chargant de récupérer les thumbs )
-					imageId=item[:item.find('.jpg')][-16:-4].replace('/','')
-					print(imageId,item)
-					while imageId[0] == '0':
-						imageId=imageId[1:]
-					listeVentestemp[imageId]["images"].append(item[:item.find('?v=')].replace('img_thumb','img_large'))
+							# print(venteDef)
+							listeVentes.append(vente(venteDef))
 
-				for id in listeVentestemp:
-					listeVentes.append(vente(id,listeVentestemp[id]))
+						else:
+							print('{0}-{1}-VENDEUR pas Voulu'.format(id,vendeur))
+
+
+					except:
+						print('{0} - ERREUR Aucune image'.format(id))
+
 			else:
 				print('Problème lecture {0} . Code retour : {1}'.format(page,r.status_code))
-
-			# on ne veut pas les objets de cpaphil, on repasse donc les ventes et on supprime les lignes en question
-			for item in listeVentes:
-				if item.vendeur!='cpaphil':
-					listeVentesNettoyées.append(item)
-		return listeVentesNettoyées
+		# for lesventes in listeVentes:
+		# 	print("\n")
+		# 	lesventes.get_info()
+		return listeVentes
 
 	# retourne les images de la recherche
 	# on fait un boucle sur les images de la vente pour avoir tout dans un seul array
@@ -285,101 +280,36 @@ class recherche:
 				images.append(ventesimg)
 		return images
 
+	def download_images(self):
+		liste_dl=[]
+		for lesventes in self.ventes:
+			liste_dl.append(lesventes.images)
+		# for dl in liste_dl:
+		# 	# print(dl)
+		# 	# print(len(dl))
+		# 	for dl1 in dl:
+		# 		try:
+		# 			print('url : {0}'.format(dl1[0]))
+		# 			print('nom : {0}\n'.format(dl1[1]))
+		# 		except:
+		# 			print('pb sur {0}'.format(dl1))
+		# pp = pprint.PrettyPrinter(indent=4)
+		download_multithread(liste_dl,self)
 
 class vente:
-	def __init__(self,id,dict):
-		self.id=id
-		self.prix=dict['prix'].replace(",",".")
-		#self.url=url
+	def __init__(self,dict):
+		self.id=dict['id']
+		self.prix=dict['prix']
 		self.vendeur=dict['vendeur']
-		self.libellé=dict['libellé']
-		self.images={}
-		for img in dict['images']:
-			numImage=img[:img.find('.jpg')][-3:]
-			# on récupère l'url
-			try:
-				self.images[numImage]['url']=img
-			except:
-				self.images[numImage]={}
-				self.images[numImage]['url']=img
-			# on calcule le libellé pour le téléchargement
-			self.images[numImage]['nomImage']='{0}_{1}_prix:{2}_{3}_{4}.jpg'.format(self.id,self.vendeur,self.prix,self.libellé,numImage)
-
+		self.images=dict['listeImages']
 		self.nbImages=len(self.images)
-		self.listeimages=self.get_listeimages()
 
-	def info(self):
-		print("\nid : {0}".format(self.id))
-		print("Libellé : {0}".format(self.libellé))
+	def get_info(self):
+		print("id : {0}".format(self.id))
 		print("vendeur : {0}".format(self.vendeur))
 		print("prix : {0}".format(self.prix))
 		print("Nb images : {0}".format(self.nbImages))
-		# print("images : {0}".format(self.images))
-		for lesimages in self.images:
-			print('\turl : {0}'.format(self.images[lesimages]['url']))
-			print('\tnom image : {0}'.format(self.images[lesimages]['nomImage']))
-			# print('nom image :{0}'.format(self.images[lesimages]['nomImages']))
-
-	def get_listeimages(self):
-		listeurl=[]
-		listenoms=[]
-		listeimages=[]
-		for lesimages in self.images:
-			# print('b : {0}'.format(self.images[lesimages]['url']))
-			listeimages.append([self.images[lesimages]['url'],self.images[lesimages]['nomImage']])
-			# listenoms.append(self.images[lesimages]['nomImage'])
-			# listeimages.append([listeurl,listenoms])
-		return listeimages
-
-	def download_images_multi_cpu(self,rechercheimage):
-		# on crée le dir si il n'existe pas
-		cpus = multiprocessing.cpu_count()
-		max_pool_size=4
-		# pool= multiprocessing.Pool(cpus if cpus < max_pool_size else max_pool_size)
-		pool=multiprocessing.Pool(100)
-
-		download_dir=rechercheimage.download_dir
-		dirAcreer = Path(download_dir)
-		if not dirAcreer.exists():
-			dirAcreer.mkdir(parents=True, exist_ok=True)
-		for lesimages in self.images:
-			url=self.images[lesimages]['url']
-			dest='{1}/{2}'.format(self.images[lesimages]['url'],download_dir,self.images[lesimages]['nomImage'])
-			if not os.path.isfile(dest):
-				try:
-					# wget.download(url,dest)
-					pool.apply_async(run_process, args=(url, dest, ))
-				except:
-					print('Erreur sur {0}'.format(url))
-
-		pool.close()
-		pool.join()
-		print("finish")
-
-def download_multicpu(liste,rechercheimage):
-	# on crée le dir si il n'existe pas
-	cpus = multiprocessing.cpu_count()
-	max_pool_size=20
-	pool= multiprocessing.Pool(cpus if cpus < max_pool_size else max_pool_size)
-
-	download_dir=rechercheimage.download_dir
-	print(download_dir)
-	dirAcreer = Path(download_dir)
-	if not dirAcreer.exists():
-		dirAcreer.mkdir(parents=True, exist_ok=True)
-	for dl in liste:
-		url=dl[0][0]
-		dest='{0}/{1}'.format(download_dir,dl[0][1])
-	# if not os.path.isfile(dest):
-			# try:
-				# wget.download(url,dest)
-		pool.apply_async(run_process, args=(url, dest, ))
-			# except:
-			# 	print('Erreur sur {0}'.format(url))
-
-	pool.close()
-	pool.join()
-	print("finish")
+		print("images : {0}".format(self.images))
 
 def download_multithread(liste,rechercheimage):
 	# on crée le dir si il n'existe pas
@@ -393,7 +323,7 @@ def download_multithread(liste,rechercheimage):
 	for dl in liste:
 		for dl1 in dl:
 			while threading.activeCount() > maxthread:
-				print('threading.activeCount={0}'.format(threading.activeCount()))
+				print('\nthreading.activeCount={0}'.format(threading.activeCount()))
 				time.sleep(1)
 			try :
 				url=dl1[0]
@@ -414,27 +344,16 @@ def download_multithread(liste,rechercheimage):
 
 	# if not os.path.isfile(dest):
 			# try:
-			 wget.download(url,dest)
-# def recherche_multithread(section,term):
-# 	# on crée le dir si il n'existe pas
-# 	maxthread = 60
-#
-# 	for fini in (True,False)
-# 		t = threading.Thread(target=recherche, args=(section, term, True))
-# 		t.start()
-#
-# 	time.sleep(5)
-# 	print('threading.activeCount={0}'.format(threading.activeCount()))
-# 	print('add all pic to download list..')
-# 	cthread = threading.current_thread()
-# 	for t in threading.enumerate():
-# 		if t != cthread:
-# 			pass #t.terminate()
-# 	print('bye..')
-#
-# 	# if not os.path.isfile(dest):
-# 			# try:
-# 				# wget.download(url,dest)
+		 	# wget.download(url,dest)
+
+def Delcampe_dowload(section,term):
+	# on lance la recherche sur les ventes ouvertes et on d/l puis idem pour les fermées
+	for closed in (False, True):
+
+		rechercheventes=recherche(section,term,closed)
+		rechercheventes.download_images()
+
+
 
 
 if __name__ == "__main__":
@@ -446,30 +365,24 @@ if __name__ == "__main__":
 	print(commande)
 
 	print(section)
+	# rechercheventes.ventes
+	# rechercheventes.
+	Delcampe_dowload(section,term)
 
-	# rechercheEnCours=recherche(section,term,False)
-	liste_dl=[]
 
-	liste_dl=[]
+	# 	liste_dl=[]
 
-	for closed in (False, True):
-		liste_dl=[]
-
-		rechercheventes=recherche(section,term,closed)
-		for lesventes in rechercheventes.ventes:
-			# pp.pprint(lesventes.listeimages)
-			# print('a : {0}'.format(lesventes.listeimages))
-			liste_dl.append(lesventes.listeimages)
-		for dl in liste_dl:
-			print(dl)
-			print(len(dl))
-			for dl1 in dl:
-				try:
-					print('url : {0}'.format(dl1[0]))
-					print('nom : {0}\n'.format(dl1[1]))
-				except:
-					print('pb sur {0}'.format(dl1))
-		pp = pprint.PrettyPrinter(indent=4)
-		# pp.pprint(liste_dl)
-		# print(liste_dl)
-		download_multithread(liste_dl,rechercheventes)
+		# rechercheventes=recherche(section,term,closed)
+		# for lesventes in rechercheventes.ventes:
+		# 	liste_dl.append(lesventes.listeimages)
+		# for dl in liste_dl:
+		# 	print(dl)
+		# 	print(len(dl))
+		# 	for dl1 in dl:
+		# 		try:
+		# 			print('url : {0}'.format(dl1[0]))
+		# 			print('nom : {0}\n'.format(dl1[1]))
+		# 		except:
+		# 			print('pb sur {0}'.format(dl1))
+		# pp = pprint.PrettyPrinter(indent=4)
+		# download_multithread(liste_dl,rechercheventes)

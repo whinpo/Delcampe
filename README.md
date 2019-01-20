@@ -2,4 +2,5 @@
 
 
 Script permettant de récupérer les images d'annonces Delcampe en fonction d'une collection puis d'une section et enfin de rajouter des options de recherche.<br/>
-Le script regarde combien d'annonces correspondent aux différents critère et découpe en X screens 
+
+On utilise BeautifulSoup pour parser la page ainsi que le multithreading pour télécharger rapidement les images

@@ -303,6 +303,7 @@ class vente:
 		self.vendeur=dict['vendeur']
 		self.images=dict['listeImages']
 		self.nbImages=len(self.images)
+		self.get_info(self)
 
 	def get_info(self):
 		print("id : {0}".format(self.id))

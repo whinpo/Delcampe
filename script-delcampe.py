@@ -145,7 +145,7 @@ class recherche:
 		if self.closed == True:
 			displayongoing='&display_ongoing=closed'
 		# on affiche en gallerie avec les thumbs (pour pouvoir avoir les zooms) et on trie par date de vente
-		url='{0}/{1}/search?view=gallery&order=sale_start_datetime&view=thumbs&size={2}{3}{4}'.format(self.urlDelcampeCollections,self.section,self.size,termURL,displayongoing)
+		url='{0}/{1}/search?view=gallery&order=sale_start_datetime&country=NET&view=thumbs&size={2}{3}{4}'.format(self.urlDelcampeCollections,self.section,self.size,termURL,displayongoing)
 		return url
 
 	# génération du nom du répertoire de téléchargement

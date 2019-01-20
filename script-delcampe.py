@@ -197,15 +197,15 @@ class recherche:
 		splitted=[]
 		splittedFullURL=[]
 		numpage=1
+		# on crée une liste listeVentes qui va contenir un nested dictionnary
 		listeVentes=[]
-		listeVentesNettoyées=[]
 		# liste des vendeurs non voulus
 		vendeursNonVoulus=['cpaphil']
 
 		for page in self.pages:
 			print('Récupération de la liste des ventes de la page {0}/{1}'.format(numpage,self.nbPages))
 			# on se connecte sur la page
-			r = requests.get(self.searchURL)
+			r = requests.get(page)
 			# on contrôle que la connexion est OK
 			if r.status_code == 200:
 				print('Lecture URL {0} : OK'.format(page))
@@ -214,8 +214,8 @@ class recherche:
 				print('Analyse de la page en cours {0}'.format(page))
 				numpage=numpage+1
 
-				# on crée une liste listeVentes qui va contenir un nested dictionnary
-				listeVentes=[]
+
+
 
 				# commande BeautifulSoup pour récupérer l'ensemble des ventes (id avec valeur item-999999)
 				soup=BeautifulSoup.BeautifulSoup(r.text,"lxml")
@@ -230,6 +230,12 @@ class recherche:
 					# on regarde si il y a bien une image
 					try:
 						test=vente_item.find('div',class_='image-content').a.img
+					except:
+						print('{0} - ERREUR Aucune image'.format(id))
+						# print(vente_item)
+
+					else:
+						# print('on est là {0}'.format(test))
 						# si oui on regarde si vendeur non voulu ou pas
 						vendeur=vente_item.find('div',class_='option-content').a['title']
 						if vendeur not in vendeursNonVoulus:
@@ -259,16 +265,12 @@ class recherche:
 
 						else:
 							print('{0}-{1}-VENDEUR pas Voulu'.format(id,vendeur))
-
-
-					except:
-						print('{0} - ERREUR Aucune image'.format(id))
-
 			else:
 				print('Problème lecture {0} . Code retour : {1}'.format(page,r.status_code))
 		# for lesventes in listeVentes:
 		# 	print("\n")
 		# 	lesventes.get_info()
+		print('on a : {0} ventes popopo'.format(len(listeVentes)))
 		return listeVentes
 
 	# retourne les images de la recherche
@@ -284,16 +286,6 @@ class recherche:
 		liste_dl=[]
 		for lesventes in self.ventes:
 			liste_dl.append(lesventes.images)
-		# for dl in liste_dl:
-		# 	# print(dl)
-		# 	# print(len(dl))
-		# 	for dl1 in dl:
-		# 		try:
-		# 			print('url : {0}'.format(dl1[0]))
-		# 			print('nom : {0}\n'.format(dl1[1]))
-		# 		except:
-		# 			print('pb sur {0}'.format(dl1))
-		# pp = pprint.PrettyPrinter(indent=4)
 		download_multithread(liste_dl,self)
 
 class vente:
@@ -303,7 +295,7 @@ class vente:
 		self.vendeur=dict['vendeur']
 		self.images=dict['listeImages']
 		self.nbImages=len(self.images)
-		self.get_info(self)
+		# self.get_info()
 
 	def get_info(self):
 		print("id : {0}".format(self.id))
@@ -314,7 +306,7 @@ class vente:
 
 def download_multithread(liste,rechercheimage):
 	# on crée le dir si il n'existe pas
-	maxthread = 60
+	maxthread = 80
 
 	download_dir=rechercheimage.download_dir
 	print(download_dir)
@@ -350,7 +342,6 @@ def download_multithread(liste,rechercheimage):
 def Delcampe_dowload(section,term):
 	# on lance la recherche sur les ventes ouvertes et on d/l puis idem pour les fermées
 	for closed in (False, True):
-
 		rechercheventes=recherche(section,term,closed)
 		rechercheventes.download_images()
 

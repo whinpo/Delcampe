@@ -21,7 +21,7 @@ def run_process(url, output_path):
 			print('\nproblème d/l {0}'.format(url))
 
 def usage():
-	print('script-delcampe.py -s <section> -t <terme de recherche> <-n maxscreens>  [- si vendu],["section="]')
+	print('script-delcampe.py -s <section> -t <terme de recherche> <-p>')
 	print('section : de la forme cartes-postales/france et on peut ajouter autant de sous-sections que l''on souhaite')
 	print(' 		 Pour trouver la section, il suffit d''aller sur un objet en vente et de regarder l''url')
 
@@ -60,7 +60,7 @@ def main(argv):
 	vendu=False
 
 	try:
-		opts, args = getopt.getopt(argv,"s:t:m:hv",["section=","term=","maxscreens="])
+		opts, args = getopt.getopt(argv,"s:t:m:hvp",["section=","term="])
 	except getopt.GetoptError:
 		usage()
 		sys.exit(2)
@@ -74,17 +74,11 @@ def main(argv):
 		elif opt in ("-t", "--term"):
 			term = arg
 			optionT='-t {0}'.format(term)
-		elif opt in ("-m", "--maxscreens"):
-			maxscreens = arg
-			if not maxscreens.isnumeric():
-				print("Le nombre de screens doit être numérique")
-				usage()
-				sys.exit(2)
-			else:
-				optionM='-m {0}'.format(maxscreens)
 		elif opt in ("-v", "--vendu"):
 			vendu = True
 			optionV='-v'
+		elif opt in ("-p", "--phrase"):
+			term="{0}&search_mode=phrase".format(term)
 
 
 	# on contrôle que -s a bien été rempli !
@@ -360,7 +354,6 @@ if __name__ == "__main__":
 	# rechercheventes.ventes
 	# rechercheventes.
 	Delcampe_dowload(section,term)
-
 
 	# 	liste_dl=[]
 

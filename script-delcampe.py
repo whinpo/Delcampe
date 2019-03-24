@@ -106,7 +106,7 @@ def main(argv):
 		optionVendeurId=''
 
 	commande='script-delcampe.py {0} {1} {2} {3} {4}'.format(optionS,optionT.strip(),optionM.strip(),optionV,optionVendeurId)
-	print('vendeurId : {0}'.format(vendeurId))
+
 class recherche:
 	urlDelcampe="https://www.delcampe.net"
 	urlDelcampeCollections='{0}/fr/collections'.format(urlDelcampe)
@@ -365,11 +365,6 @@ if __name__ == "__main__":
 
 	#url='https://www.delcampe.net/fr/collections/search?categories%5B%5D=674&search_mode=all&excluded_terms=&is_searchable_in_descriptions=0&is_searchable_in_translations=0&term=1900+&show_type=all&display_ongoing=ongoing&started_days=&started_hours=&ended_hours=&display_only=&min_price=&max_price=&currency=all&seller_localisation=&view=thumbs&order=&country=&size=%s' s ($size)
 	print(commande)
-
-	print(section)
-	print(term)
-	print(vendeurId)
-
 	# rechercheventes.ventes
 	# rechercheventes.
 	Delcampe_dowload(section,term)

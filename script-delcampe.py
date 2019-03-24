@@ -21,9 +21,9 @@ def run_process(url, output_path):
 			print('\nproblème d/l {0}'.format(url))
 
 def usage():
-	print('script-delcampe.py -s <section> -t <terme de recherche> <-p>')
+	print('script-delcampe.py -s <section> -t <terme de recherche> <-p> <-V vendeur> ')
 	print('section : de la forme cartes-postales/france et on peut ajouter autant de sous-sections que l''on souhaite')
-	print(' 		 Pour trouver la section, il suffit d''aller sur un objet en vente et de regarder l''url')
+	print(" 		 Pour trouver la section, il suffit d'aller sur un objet en vente et de regarder l'url")
 
 def split(arr, size):
      arrs = []
@@ -53,6 +53,7 @@ def main(argv):
 	global optionM
 	global vendu
 	global optionV
+	global vendeurId
 
 
 	defaultmaxscreens=10
@@ -60,7 +61,7 @@ def main(argv):
 	vendu=False
 
 	try:
-		opts, args = getopt.getopt(argv,"s:t:m:hvp",["section=","term="])
+		opts, args = getopt.getopt(argv,"s:t:m:V:hvp",["section=","term="])
 	except getopt.GetoptError:
 		usage()
 		sys.exit(2)
@@ -73,16 +74,24 @@ def main(argv):
 			optionS='-s {0}'.format(section)
 		elif opt in ("-t", "--term"):
 			term = arg
-			optionT='-t {0}'.format(term)
+			optionT='-t {0}'.format(term.strip())
 		elif opt in ("-v", "--vendu"):
 			vendu = True
 			optionV='-v'
 		elif opt in ("-p", "--phrase"):
 			term="{0}&search_mode=phrase".format(term)
+		elif opt in ("-V", "--vendeurId"):
+			vendeurId = arg
+			print(arg)
+			# optionVendeurId='?seller_ids%5B0%5D={0}'.format(vendeurId)
+			optionVendeurId='-V {0}'.format(vendeurId)
 
 
 	# on contrôle que -s a bien été rempli !
-	if not section:
+	try:
+		if section:
+			print('')
+	except:
 		print('Param -s obligatoire')
 		usage()
 		sys.exit(2)
@@ -93,9 +102,11 @@ def main(argv):
 	if not optionM:
 		optionM=''
 		maxscreens=defaultmaxscreens
+	if not optionVendeurId:
+		optionVendeurId=''
 
-	commande='script-delcampe.py {0} {1} {2} {3}'.format(optionS,optionT,optionM,optionV)
-
+	commande='script-delcampe.py {0} {1} {2} {3} {4}'.format(optionS,optionT.strip(),optionM.strip(),optionV,optionVendeurId)
+	print('vendeurId : {0}'.format(vendeurId))
 class recherche:
 	urlDelcampe="https://www.delcampe.net"
 	urlDelcampeCollections='{0}/fr/collections'.format(urlDelcampe)
@@ -104,10 +115,11 @@ class recherche:
 	# nombre de réponses par page
 	size=480
 
-	def __init__(self,section,term,closed):
+	def __init__(self,section,term,vendeurId,closed):
 		self.section=section
 		self.term=term
 		self.closed=closed
+		self.vendeurId=vendeurId
 		self.searchURL=self.set_searchURL()
 		self.nbPages=self.get_nbPages()
 		self.pages=self.get_pages()
@@ -134,8 +146,10 @@ class recherche:
 		displayongoing=''
 		if self.closed == True:
 			displayongoing='&display_ongoing=closed'
+		if self.vendeurId:
+			vendeurIdURL='&seller_ids%5B0%5D={0}'.format(vendeurId)
 		# on affiche en gallerie avec les thumbs (pour pouvoir avoir les zooms) et on trie par date de vente
-		url='{0}/{1}/search?view=gallery&order=sale_start_datetime&country=NET&view=thumbs&size={2}{3}{4}'.format(self.urlDelcampeCollections,self.section,self.size,termURL,displayongoing)
+		url='{0}/{1}/search?view=gallery&order=sale_start_datetime&country=NET&view=thumbs&size={2}{3}{4}{5}'.format(self.urlDelcampeCollections,self.section,self.size,termURL,displayongoing,vendeurIdURL)
 		return url
 
 	# génération du nom du répertoire de téléchargement
@@ -144,6 +158,8 @@ class recherche:
 		download_dir='{0}/{1}'.format(homedir,self.section)
 		if term:
 			download_dir='{0}/{1}'.format(download_dir,term)
+		if vendeurId:
+			download_dir='{0}-vendeur-{1}'.format(download_dir,vendeurId)
 		if self.closed==True:
 			encours="-closed"
 		else:
@@ -336,7 +352,7 @@ def download_multithread(liste,rechercheimage):
 def Delcampe_dowload(section,term):
 	# on lance la recherche sur les ventes ouvertes et on d/l puis idem pour les fermées
 	for closed in (False, True):
-		rechercheventes=recherche(section,term,closed)
+		rechercheventes=recherche(section,term,vendeurId,closed)
 		rechercheventes.download_images()
 
 
@@ -351,6 +367,9 @@ if __name__ == "__main__":
 	print(commande)
 
 	print(section)
+	print(term)
+	print(vendeurId)
+
 	# rechercheventes.ventes
 	# rechercheventes.
 	Delcampe_dowload(section,term)

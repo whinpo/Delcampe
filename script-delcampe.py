@@ -57,7 +57,7 @@ def main(argv):
 
 
 	defaultmaxscreens=10
-	term=optionC=optionS=optionT=optionM=optionV=''
+	term=optionC=optionS=optionT=optionM=optionV=optionVendeurId=''
 	vendu=False
 
 	try:
@@ -103,7 +103,7 @@ def main(argv):
 		optionM=''
 		maxscreens=defaultmaxscreens
 	if not optionVendeurId:
-		optionVendeurId=''
+		vendeurId=''
 
 	commande='script-delcampe.py {0} {1} {2} {3} {4}'.format(optionS,optionT.strip(),optionM.strip(),optionV,optionVendeurId)
 
@@ -148,6 +148,9 @@ class recherche:
 			displayongoing='&display_ongoing=closed'
 		if self.vendeurId:
 			vendeurIdURL='&seller_ids%5B0%5D={0}'.format(vendeurId)
+		else:
+			vendeurIdURL=''
+
 		# on affiche en gallerie avec les thumbs (pour pouvoir avoir les zooms) et on trie par date de vente
 		url='{0}/{1}/search?view=gallery&order=sale_start_datetime&country=NET&view=thumbs&size={2}{3}{4}{5}'.format(self.urlDelcampeCollections,self.section,self.size,termURL,displayongoing,vendeurIdURL)
 		return url
@@ -316,10 +319,9 @@ class vente:
 
 def download_multithread(liste,rechercheimage):
 	# on crée le dir si il n'existe pas
-	maxthread = 80
+	maxthread = 120
 
 	download_dir=rechercheimage.download_dir
-	print(download_dir)
 	dirAcreer = Path(download_dir)
 	if not dirAcreer.exists():
 		dirAcreer.mkdir(parents=True, exist_ok=True)
@@ -344,6 +346,7 @@ def download_multithread(liste,rechercheimage):
 		if t != cthread:
 			pass #t.terminate()
 	print('bye..')
+	os.system('gthumb {0} &'.format(download_dir))
 
 	# if not os.path.isfile(dest):
 			# try:

@@ -240,6 +240,7 @@ class recherche:
 					i+=1
 					venteDef={}
 					id=vente_item['id'].split('-')[1]
+					#print('analyse vente {0}'.format(id))
 					# on regarde si il y a bien une image
 					try:
 						test=vente_item.find('div',class_='image-content').a.img
@@ -250,7 +251,11 @@ class recherche:
 					else:
 						# print('on est là {0}'.format(test))
 						# si oui on regarde si vendeur non voulu ou pas
-						vendeur=vente_item.find('div',class_='option-content').a['title']
+						try:
+							vendeur=vente_item.find('div',class_='option-content').a['title']
+						except:
+							vendeur="compte_supprimé"
+							print("Objet {0} - vendeur compte supprimé".format(id))
 						if vendeur not in vendeursNonVoulus:
 							# print(vendeur)
 							# on a des images et un vendeur voulu => on crée la vente

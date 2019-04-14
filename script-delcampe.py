@@ -236,11 +236,11 @@ class recherche:
 				nbVentesPage=len(listeventes)
 				i=1
 				for vente_item in listeventes:
-					# print('On traite : {0} - ({1}/{2})'.format(vente_item['id'],i,nbVentesPage))
+					#print('On traite : {0} - ({1}/{2})'.format(vente_item['id'],i,nbVentesPage))
 					i+=1
 					venteDef={}
 					id=vente_item['id'].split('-')[1]
-					#print('analyse vente {0}'.format(id))
+					print('analyse vente {0}'.format(id))
 					# on regarde si il y a bien une image
 					try:
 						test=vente_item.find('div',class_='image-content').a.img
@@ -272,11 +272,15 @@ class recherche:
 								image=imagebrute.split('?')[0].replace('img_thumb','img_large')
 								# on contruit le libellé : id_vendeur_prix:prix_libellélisible_001.jpg par exemple
 								# pour le _001.jpg on utilise rsplit pour prendre _001.jpg?v=2 et on coupe ensuite
-								libelle='{0}_{1}_prix:{2}_{3}_{4}'.format(id,vendeur,prix,urlify(listeimages.a.img['alt']),imagebrute.rsplit('_',1)[1].split('?')[0])
-								# print(image)
-								# print(libelle)
-								imageDef=[image,libelle]
-								venteDef['listeImages'].append(imageDef)
+								# on gère les images "osées" qui ne s'affichent pas via le Script
+								try:
+									libelle='{0}_{1}_prix:{2}_{3}_{4}'.format(id,vendeur,prix,urlify(listeimages.a.img['alt']),imagebrute.rsplit('_',1)[1].split('?')[0])
+									# print(image)
+									# print(libelle)
+									imageDef=[image,libelle]
+									venteDef['listeImages'].append(imageDef)
+								except:
+									print('{0} - ERREUR Image Censurée'.format(id))
 
 							# print(venteDef)
 							listeVentes.append(vente(venteDef))

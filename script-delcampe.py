@@ -213,7 +213,9 @@ class recherche:
 		# on crée une liste listeVentes qui va contenir un nested dictionnary
 		listeVentes=[]
 		# liste des vendeurs non voulus
-		vendeursNonVoulus=['cpaphil']
+		# cpaphil petites nbImages
+		# my_postales : masque un 1/4 des CP
+		vendeursNonVoulus=['cpaphil','my_postales']
 
 		for page in self.pages:
 			print('Récupération de la liste des ventes de la page {0}/{1}'.format(numpage,self.nbPages))

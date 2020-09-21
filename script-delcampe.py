@@ -4,6 +4,7 @@ import logging
 import os
 import pprint
 from pathlib import Path
+#import requests
 from requests_html import HTMLSession
 import wget
 import multiprocessing
@@ -13,7 +14,7 @@ import re
 session = HTMLSession()
 
 def run_process(url, output_path):
-	print('download {0} vers {1}'.format(url,output_path))
+	# print('download {0} vers {1}'.format(url,output_path))
 	if not os.path.isfile(output_path):
 		try:
 			wget.download(url, out=output_path)
@@ -234,7 +235,10 @@ class recherche:
 				i=0
 				for id in listeId:
 					# on supprime item-
-					idnum=id[5:]
+					
+					idnum=id.split('-')[1]
+					# print(idnum,id)
+					# print('on crée {}'.format(idnum))
 					# on intialise le dict nested qui a pour clé l'id
 					listeVentestemp[idnum] = {}
 					# affectation libellé vente
@@ -249,7 +253,7 @@ class recherche:
 
 				# on parcout listeImg et on affecte les images à "images" de l'id en question
 				print('Génération de la liste des images des Ventes  {0}'.format(page))
-				print(listeImg)
+				# print(listeImg)
 				for item in listeImg:
 					# l'image est de la forme https://images-00.delcampe-static.net/img_large/auction/000/618/719/212_001.jpg?v=xx
 					# on enleve le .jpg et ce qui suit (en cherchant sa position)
@@ -257,10 +261,12 @@ class recherche:
 					# 618/719/212 => 618719212
 					# cela nous permet de retrouver l'id et donc de pouvoir affecter
 					# de plus on transforme le thumb en large (la requête xpath se chargant de récupérer les thumbs )
-					imageId=item[:item.find('.jpg')][-16:-4].replace('/','')
-					print(imageId,item)
-					while imageId[0] == '0':
-						imageId=imageId[1:]
+					# imageId=item[:item.find('.jpg')][-16:-4].replace('/','').strip('0')
+					imageId=item.split('auction/')[1].split('_')[0].replace('/','').lstrip('0')
+					# print(imageId)
+					# print("po")
+					# while imageId[0] == '0':
+					# 	imageId=imageId[1:]
 					listeVentestemp[imageId]["images"].append(item[:item.find('?v=')].replace('img_thumb','img_large'))
 
 				for id in listeVentestemp:
@@ -412,12 +418,12 @@ def download_multithread(liste,rechercheimage):
 
 	# if not os.path.isfile(dest):
 			# try:
-			 wget.download(url,dest)
+	wget.download(url,dest)
 # def recherche_multithread(section,term):
 # 	# on crée le dir si il n'existe pas
 # 	maxthread = 60
 #
-# 	for fini in (True,False) 
+# 	for fini in (True,False)
 # 		t = threading.Thread(target=recherche, args=(section, term, True))
 # 		t.start()
 #

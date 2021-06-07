@@ -106,7 +106,7 @@ def main(argv):
 class recherche:
 	urlDelcampe="https://www.delcampe.net"
 	urlDelcampeCollections='{0}/fr/collections'.format(urlDelcampe)
-	home="/Philatélie/pompage_sites/Delcampe2"
+	home="/mnt/700G/Philatélie"
 
 	# nombre de réponses par page
 	size=480
@@ -176,7 +176,8 @@ class recherche:
 
 			# liste des pages
 			try:
-				listePages=r.html.xpath('//*[@class="numbers-container"]/*/a/text()')
+				# listePages=r.html.xpath('//*[@class="numbers-container"]/*/a/text()')
+				listePages=r.html.xpath('//*[@data-pagination-page-number]/@data-pagination-page-number')
 				print('liste {0}'.format(listePages))
 				nbpages=listePages[-1:][0]
 			except:
@@ -235,7 +236,7 @@ class recherche:
 				i=0
 				for id in listeId:
 					# on supprime item-
-					
+
 					idnum=id.split('-')[1]
 					# print(idnum,id)
 					# print('on crée {}'.format(idnum))
@@ -443,7 +444,7 @@ def download_multithread(liste,rechercheimage):
 
 if __name__ == "__main__":
 
-	homedir='/home/whinpo/Philatélie/pompage_sites/Delcampe2'
+	homedir='/mnt/700G/Philatélie/pompage_sites/Delcampe3'
 	main(sys.argv[1:])
 
 	#url='https://www.delcampe.net/fr/collections/search?categories%5B%5D=674&search_mode=all&excluded_terms=&is_searchable_in_descriptions=0&is_searchable_in_translations=0&term=1900+&show_type=all&display_ongoing=ongoing&started_days=&started_hours=&ended_hours=&display_only=&min_price=&max_price=&currency=all&seller_localisation=&view=thumbs&order=&country=&size=%s' s ($size)

@@ -10,6 +10,7 @@ import re
 import locale
 import requests
 from lxml import html
+from crontab import CronTab
 
 # Function convert second into day
 # hours, minutes and seconds
@@ -25,19 +26,27 @@ def ConvertSectoDay(n):
     return(retour)
 
 def usage():
-	print('{} [item_number]: snipe pour Delcampe'.format(sys.argv[0]))
+	exit('{} [item_number]: snipe pour Delcampe'.format(sys.argv[0]))
+
+def add_auction():
+     print('on ajoute')
+
+def get_auction():
+    print('on récupère')
 
 
 def main():
+    # si on passe un numéro d'enchere : on regarde si elle exsite et si on a déjà un snipe ou pas
+    # si pas de snipe on propose d'en créer un
+    # si on en a un, on propose de la modifier ou le supprimer
     try:
         item_number=sys.argv[1]
-
         # on passe en fr pour simplifier les calculs sur les prix et dates
         locale.setlocale( locale.LC_ALL, 'fr_FR.UTF-8' )
         session = HTMLSession()
 
-        USERNAME="YYYY"
-        PASSWORD="XXXXXX"
+        USERNAME="whinpo"
+        PASSWORD="Stanley09PO"
         DELCAMPE="https://www.delcampe.net"
         LOGIN_URL="{}/fr/my-account/login_check".format(DELCAMPE)
         SEARCH_URL="{}/fr/collections/search/by/number?marketplace_item_search_by_number[id]=".format(DELCAMPE)
@@ -55,21 +64,17 @@ def main():
         "_remember_me": "on",
         "user_login[_token]": authenticity_token
         }
-        # print(payload)
-        #nom du user loggé : /html/body/header/div[1]/div/ul/li[2]/ul/li/a/span
-        #
+
         # Perform login
         result = session.post(LOGIN_URL, data = payload, headers = dict(referer = LOGIN_URL))
-        logged=result.html.xpath('/html/body/header/div[1]/div/ul/li[2]/ul/li/a/span/@title')[0]
-
-        # on contrôle que le user est bien connecté
         try :
-        	if logged == USERNAME:
-        		print('{} connecté sur Delcampe'.format(logged))
+            logged=result.html.xpath('/html/body/header/div[1]/div/ul/li[2]/ul/li/a/span/@title')[0]
+            print('{} connecté sur Delcampe'.format(logged))
         except:
-        	exit('Erreur connexion')
+        	exit('Erreur de connexion - Vérifiez votre mot de passe')
 
-        #item_number="1081788043"
+
+        # on recherche l'objet
         url='{}"{}"'.format(SEARCH_URL,item_number)
         result = session.get(url, headers = dict(referer = url))
 
@@ -78,7 +83,6 @@ def main():
             rech_libelle='//*[@data-item-title-{}]/text()'.format(item_number)
             libelle=result.html.xpath(rech_libelle)[0]
             print(libelle)
-            print(url)
             offres=result.html.xpath('//*[@data-tab-bids]/text()')[0]
             print(offres)
             devise=result.html.xpath('//*[@itemprop="priceCurrency"]/@content')[0]
@@ -103,16 +107,22 @@ def main():
                 print('Fin enchères : {}'.format(fin_encheres))
                 print('  soit : {}'.format(temps_restant))
 
+                # on regarde si cet objet est déja dans la liste
+                # si non, on propose de le mettre et on place le cron
+                # si oui : on propose de modifier l'enchère et le cron ou de les supprimer
+                # my_cron = CronTab(user='whinpo')
+                # for job in my_cron:
+                #     print job
+
             except:
                 print("La vente de l'objet {} est terminée. Voir {}".format(item_number,url))
 
         except:
             print("L'objet {} n'existe pas".format(item_number))
 
-        finally:
-            session.close()
-            print('Session fermée')
-    except:
-        usage()
+    finally:
+        session.close()
+        print('Session fermée')
+
 if __name__ == '__main__':
     main()

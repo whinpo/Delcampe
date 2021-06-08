@@ -222,12 +222,17 @@ class recherche:
 				numpage=numpage+1
 
 				# commandes xpath pour récupérer l'ensemble des ventes, id, prix et liste des images
-				listeId=r.html.xpath('//*[@class="item-listing item-all-thumbs"]/div[@class="item-gallery"]/@id')
+				# listeId=r.html.xpath('r.html.xpath('//*[@class="item-listing view-thumbs"]/div/@id')
+				prefixe='//*[@class="item-listing view-thumbs"]'
+				listeId=r.html.xpath('{}/div/@id'.format(prefixe))
 				#listeImg=r.html.xpath('//*[@class="item-listing item-all-thumbs"]/*//div[@class="image-container"]/div/a/@href')
-				listeImg=r.html.xpath('//*[@class="item-listing item-all-thumbs"]/*//div[@class="image-content"]/a/img/@data-lazy')
-				listePrix=r.html.xpath('//*[@class="item-listing item-all-thumbs"]/*//div[@class="item-footer"]/*//div[@class="item-price"]/*/text()')
-				listeVendeurs=r.html.xpath('//*[@class="item-listing item-all-thumbs"]/div[@class="item-gallery"]/*//div[@class="option-content"]/a/@title')
-				listeLibellés=r.html.xpath('//*[@class="item-listing item-all-thumbs"]/div[@class="item-gallery"]//*[@class="item-footer"]/a/@title')
+				# listeImg=r.html.xpath('//*[@class="item-listing item-all-thumbs"]/*//div[@class="image-content"]/a/img/@data-lazy')
+				listeImg=r.html.xpath('{}//*/@data-lazy'.format(prefixe))
+				# listePrix=r.html.xpath('//*[@class="item-listing item-all-thumbs"]/*//div[@class="item-footer"]/*//div[@class="item-price"]/*/text()')
+				listePrix=r.html.xpath('//*[@class="item-info"]/ul/li/strong/text()')
+				# listeVendeurs=r.html.xpath('//*[@class="item-listing item-all-thumbs"]/div[@class="item-gallery"]/*//div[@class="option-content"]/a/@title')
+				# listeLibellés=r.html.xpath('//*[@class="item-listing item-all-thumbs"]/div[@class="item-gallery"]//*[@class="item-footer"]/a/@title')
+				listeLibellés=r.html.xpath('//*[contains(@class,"item-title")]/text()')
 
 				listeVentestemp={}
 
@@ -236,7 +241,6 @@ class recherche:
 				i=0
 				for id in listeId:
 					# on supprime item-
-
 					idnum=id.split('-')[1]
 					# print(idnum,id)
 					# print('on crée {}'.format(idnum))
@@ -245,7 +249,8 @@ class recherche:
 					# affectation libellé vente
 					listeVentestemp[idnum]["libellé"]=urlify(listeLibellés[i])
 					# affectation du vendeur
-					listeVentestemp[idnum]["vendeur"]=listeVendeurs[i]
+					# listeVentestemp[idnum]["vendeur"]=listeVendeurs[i]
+					listeVentestemp[idnum]["vendeur"]='aaa'
 					# affectation du prix
 					listeVentestemp[idnum]["prix"]=listePrix[i][:-2]
 					# on crée un tableau vide pour les images (on est obligé de les traiter à part, leur nb n'étant pas fixe)
@@ -263,12 +268,16 @@ class recherche:
 					# cela nous permet de retrouver l'id et donc de pouvoir affecter
 					# de plus on transforme le thumb en large (la requête xpath se chargant de récupérer les thumbs )
 					# imageId=item[:item.find('.jpg')][-16:-4].replace('/','').strip('0')
-					imageId=item.split('auction/')[1].split('_')[0].replace('/','').lstrip('0')
+					print(item)
+					try:
+						imageId=item.split('auction/')[1].split('_')[0].replace('/','').lstrip('0')
 					# print(imageId)
 					# print("po")
 					# while imageId[0] == '0':
 					# 	imageId=imageId[1:]
-					listeVentestemp[imageId]["images"].append(item[:item.find('?v=')].replace('img_thumb','img_large'))
+						listeVentestemp[imageId]["images"].append(item[:item.find('?v=')].replace('img_thumb','img_large'))
+					except:
+						listeVentestemp[imageId]["images"]=""
 
 				for id in listeVentestemp:
 					listeVentes.append(vente(id,listeVentestemp[id]))
@@ -388,7 +397,7 @@ def download_multicpu(liste,rechercheimage):
 
 def download_multithread(liste,rechercheimage):
 	# on crée le dir si il n'existe pas
-	maxthread = 60
+	maxthread = 100
 
 	download_dir=rechercheimage.download_dir
 	print(download_dir)
